@@ -2,7 +2,6 @@
 
 from typing import NamedTuple
 import re
-import time
 
 import string
 
@@ -330,7 +329,7 @@ def main() -> None:
     # Example script used: https://github.com/samgozman/AO-MACD-cross-tradingview/blob/master/ao-macd-cross-script.pine
     pine_script = open("ao-macd-cross-script.pine", mode="r", encoding="utf-8").read()
     print(bcolors.CBOLD + "We will use the following pine script as an example:" + bcolors.CEND)
-    print(bcolors.CGREYBG + pine_script + bcolors.CEND)
+    print(bcolors.CGREYBG + pine_script.replace("\n", "    \n") + bcolors.CEND)
     print()
 
     for token in tokenize(pine_script):
