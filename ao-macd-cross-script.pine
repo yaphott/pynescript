@@ -1,0 +1,104 @@
+//@version=4
+// 
+// Awesome Oscillator (AO) and MACD cross by samgozman (https://github.com/samgozman)
+// 
+// Detailed instruction how to use this script: https://github.com/samgozman/AO-MACD-cross-tradingview
+// 
+// ++++++++++ Warning: The script is provided for educational purposes only. ++++++++++ //
+
+study(title="Awesome Oscillator & MACD Cross", shorttitle="AO & MACD Cross Tactic", overlay=false)
+
+// ++++++++++ INPUTS ++++++++++ //
+ao_saucer = input(title="Display AO tea saucers", type=input.bool, defval=true)
+ao_saucer_filter = input(title="Filter saucers between 1M -1D timeframes", type=input.bool, defval=true)
+risk = input(title="Risky Pro mode (read description before use)", type=input.bool, defval=false)
+riskRapidPeriods = input(defval=21, title="Rapid area size based on AO length (periods)", type=input.integer, minval=0, maxval=500, step=1)
+riskRapidArea = input(defval=50, title="Rapid area max size, %", type=input.float, minval=0, maxval=100, step=1)
+
+// ++++++++++ LOGIC - AO ++++++++++ //
+ao = (sma(hl2, 5) - sma(hl2, 34)) / 2
+
+// ++++++++++ LOGIC - AO - tea saucer ++++++++++ //
+// find simple form:   |   |
+//                     | | |
+// color scheme - green red green
+saucer_color_long = change(ao[2]) >= 0 and change(ao[1]) <= 0 and change(ao) >= 0
+saucer_color_short = change(ao[2]) <= 0 and change(ao[1]) >= 0 and change(ao) <= 0
+saucer_form =  abs(ao[2]) > abs(ao[1]) and abs(ao[1]) < abs(ao)
+saucer_long = saucer_color_long and saucer_form
+saucer_short = saucer_color_short and saucer_form
+
+// Check for time period. 
+// Saucer works better in the timeframe range. For example saucer in 1h works better in 24h range.
+// Saucer in D works better in 7 days period. 
+//  In other words, if a tea saucer is on 1D detected between February 28 and March 1, it will be filtered.
+if (saucer_long or saucer_short) and ao_saucer_filter
+    if timeframe.isdaily
+        if dayofmonth > (dayofmonth + timeframe.multiplier)
+            saucer_short := false
+            saucer_long := false
+    else if timeframe.isminutes
+        if dayofmonth(time) != dayofmonth(time + 1000 * 60 * timeframe.multiplier)
+            saucer_short := false
+            saucer_long := false
+
+// ++++++++++ LOGIC - Rapid response area ++++++++++ //
+aoSmaHigh = sma(ao > 0 ? ao : na, riskRapidPeriods)
+aoSmaLow = sma(ao < 0 ? ao : na, riskRapidPeriods)
+areaHigh = aoSmaHigh * (riskRapidArea / 100)
+areaLow = aoSmaLow * (riskRapidArea / 100)
+
+// ++++++++++ LOGIC - MACD ++++++++++ //
+fastEMA = ema(close, 12)
+slowEMA = ema(close, 26)
+macd = fastEMA - slowEMA
+signal = sma(macd, 9)
+hist = (macd - signal) * 2
+
+// ++++++++++ RULES (NORMAL) ++++++++++ //
+macdNormalCross = cross(macd, signal) ? signal : na
+aoNormalCross = cross(ao, 0) ? 0 : na
+aoHistCross = cross(ao, hist) ? ao : na
+
+// ++++++++++ RULES (RISK) ++++++++++ //
+macdShortRiskCross = risk and crossunder(macd, areaHigh) ? areaHigh : na
+macdLongRiskCross = risk and crossover(macd, areaLow) ? areaLow : na
+macdHistRiskCross = risk and (crossover(macd, hist) or crossunder(macd, hist)) ? ao : na
+
+// ++++++++++ RULES (RISK - BETA) ++++++++++ //
+aoHighest = highest(ao, 50)[1]
+aoLowest = lowest(ao, 50)[1]
+macdRussianRouletteShort = risk ? macdNormalCross > areaHigh * 2 and macdNormalCross > aoHighest * 0.75 ? signal : na : na
+macdRussianRouletteLong = risk ? macdNormalCross < aoLowest / 2 and macdNormalCross < aoLowest * 0.75  ? signal : na : na
+
+// ++++++++++ PLOT - Rapid response area ++++++++++ //
+rapidBandTop = plot(risk ? areaHigh : na, title="Rapid signal area top", style=plot.style_area, transp=75)
+rapidBandBottom = plot(risk ? areaLow : na, title="Rapid signal area bottom", style=plot.style_area, transp=75)
+
+// ++++++++++ PLOT - AO ++++++++++ //
+plot(ao, title="Awesome oscillator", color=change(ao) <= 0 ? color.red : color.green, style=plot.style_histogram)
+
+// ++++++++++ PLOT - MACD ++++++++++ //
+plot(hist, title="MACD Histogram", color=hist > 0 ? color.green : color.red, style=plot.style_area, transp=75)
+plot(macd, title="MACD main line", color=color.blue, linewidth=2)
+plot(signal, title="MACD signal line", color=color.orange, linewidth=1)
+
+// ++++++++++ PLOT - Cross marks for normal mode ++++++++++ //
+plot(macdNormalCross, title="MACD standard cross", style=plot.style_circles, linewidth=3, color=macd > signal ? color.green : color.red)
+plot(aoNormalCross, title="AO cross", style=plot.style_cross, linewidth=3, color=ao > 0 ? color.green : color.red)
+plot(aoHistCross, title="AO cross Hist (Close the deal)", style=plot.style_circles, linewidth=2, color=color.yellow)
+
+// ++++++++++ PLOT - Cross marks for risky mode ++++++++++ //
+plot(macdShortRiskCross, title="MACD Risk cross", style=plot.style_cross, linewidth=3, color= color.red)
+plot(macdLongRiskCross, title="MACD Risk cross", style=plot.style_cross, linewidth=3, color= color.green)
+plot(macdHistRiskCross, title="MACD cross Hist (Close the deal in risky way)", style=plot.style_circles, linewidth=3, color=color.purple)
+
+// ++++++++++ PLOT - Cross marks for risky beta mode ++++++++++ //
+plot(macdRussianRouletteShort, title="MACD Russian Roulette Short Cross", style=plot.style_columns, linewidth=3, color= color.red, transp=0)
+plot(macdRussianRouletteLong, title="MACD Russian Roulette Long Cross", style=plot.style_columns, linewidth=3, color= color.green, transp=0)
+plotshape(macdRussianRouletteLong, title="MACD Russian Roulette Long Cross", text="Long: Russian Roulette", color = color.green,style=shape.flag,location=location.bottom,transp=0,size=size.small)
+plotshape(macdRussianRouletteShort, title="MACD Russian Roulette Short Cross", text="Short: Russian Roulette", color = color.red,style=shape.flag,location=location.top,transp=0,size=size.small)
+
+// ++++++++++ PLOT - AO figures ++++++++++ //
+plotshape(ao_saucer and saucer_long and ao > 0, title="Tea saucer", text="Saucer", color = color.green, style=shape.diamond, location=location.top, transp=0,size=size.tiny, offset=-1)
+plotshape(ao_saucer and saucer_short and ao < 0, title="Tea saucer", text="Saucer", color = color.red, style=shape.diamond, location=location.bottom, transp=0,size=size.tiny, offset=-1)

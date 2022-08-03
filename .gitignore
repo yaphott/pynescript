@@ -1,0 +1,13 @@
+# Ignore everything
+*
+
+# Except
+!run.py
+
+!builtin_funcs.txt
+!builtin_vars.txt
+
+!ao-macd-cross-script.pine
+
+!README.md
+!.gitignore
